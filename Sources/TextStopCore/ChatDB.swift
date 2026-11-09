@@ -19,8 +19,8 @@ public final class ChatDB {
         try incoming(where: "m.ROWID > ?", [.int(rowID)], order: "m.ROWID ASC", limit: limit)
     }
 
-    public func incoming(from handle: String, after rowID: Int64) throws -> [Incoming] {
-        try incoming(where: "m.ROWID > ? AND h.id = ?", [.int(rowID), .text(handle)], order: "m.ROWID ASC", limit: 50)
+    public func incoming(from handle: String, after rowID: Int64, limit: Int = 50) throws -> [Incoming] {
+        try incoming(where: "m.ROWID > ? AND h.id = ?", [.int(rowID), .text(handle)], order: "m.ROWID ASC", limit: limit)
     }
 
     /// Full text of one message, for forwarding spam to the carrier. Never stored.

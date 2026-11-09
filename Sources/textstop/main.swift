@@ -20,6 +20,8 @@ let usage = """
       cloud on|off           allow unclear messages to go to the Claude API
       metrics <url>|off      push metrics to a Prometheus Pushgateway each run
       no-optout on|off       also reply when a message has no "reply STOP" wording (default off)
+      campaigns [days] [--out file.csv]
+                             export political texts (time, sender, campaign, links, full text) to CSV
       spam-report on|off|backfill [hours]
                              after each real STOP, report the text to the carrier spam line 7726
     """
@@ -141,6 +143,61 @@ do {
         }
         print("last \(Int(days)) days:")
         for (key, count) in counts.sorted(by: { $0.value > $1.value }) { print("  \(key): \(count)") }
+
+    case "campaigns":
+        let days = positional.dropFirst().first.flatMap(Double.init) ?? 365
+        let outIndex = args.firstIndex(of: "--out")
+        let out = outIndex.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+            ?? NSHomeDirectory() + "/Documents/political-texts.csv"
+        let chat = try ChatDB()
+        let contacts = try ContactBook.loadFromDisk()
+        guard contacts.count > 0 else { throw RunError.noContacts }
+
+        let messages = try chat.incoming(since: Date().addingTimeInterval(-days * 86_400)).filter { message in
+            guard let text = message.text, classify(text).category == .political, !isUnsubscribeConfirmation(text),
+                  !contacts.contains(handle: message.handle) else { return false }
+            return try !chat.hasMessaged(handle: message.handle)
+        }
+        var campaignBySender: [String: Campaign?] = [:]
+        for handle in Set(messages.map(\.handle)) {
+            campaignBySender[handle] = .some(extractCampaign(from: try chat.incoming(from: handle, after: 0, limit: 1000).compactMap(\.text)))
+        }
+        // Campaigns rotate numbers but keep their link domain: carry a confirmed name to its other numbers.
+        var campaignByDomain: [String: String] = [:]
+        for message in messages {
+            guard let campaign = campaignBySender[message.handle] ?? nil,
+                  ["unsubscribe confirmation", "paid for by"].contains(campaign.source) else { continue }
+            for host in linkHosts(message.text ?? "") { campaignByDomain[rootDomain(host)] = campaign.name }
+        }
+
+        var rows = ["received,sender,campaign,campaign_source,links,text"]
+        var tally: [String: (count: Int, first: Date, last: Date, senders: Set<String>)] = [:]
+        for message in messages {
+            let text = message.text ?? ""
+            let hosts = linkHosts(text)
+            var campaign = campaignBySender[message.handle] ?? nil
+            if campaign == nil || !["unsubscribe confirmation", "paid for by"].contains(campaign!.source),
+               let domain = hosts.map(rootDomain).first(where: { campaignByDomain[$0] != nil }) {
+                campaign = Campaign(name: campaignByDomain[domain]!, source: "same link domain (\(domain))")
+            }
+            let name = campaign?.name ?? "unknown"
+            rows.append([ISO8601DateFormatter.string(from: message.date, timeZone: .current, formatOptions: [.withInternetDateTime]),
+                         message.handle, name, campaign?.source ?? "", hosts.joined(separator: " "), text]
+                .map(csvField).joined(separator: ","))
+            var entry = tally[name] ?? (0, message.date, message.date, [])
+            entry.count += 1
+            entry.first = min(entry.first, message.date)
+            entry.last = max(entry.last, message.date)
+            entry.senders.insert(message.handle)
+            tally[name] = entry
+        }
+        try (rows.joined(separator: "\n") + "\n").write(toFile: out, atomically: true, encoding: .utf8)
+        let total = rows.count - 1
+        print("\(total) political texts in the last \(Int(days)) days, from \(campaignBySender.count) numbers -> \(out)")
+        print("(excludes Contacts and anyone you've texted)")
+        for (name, entry) in tally.sorted(by: { $0.value.count > $1.value.count }) {
+            print("  \(entry.count)x  \(name)  (\(entry.senders.count) numbers, \(stamp(entry.first)) to \(stamp(entry.last)))")
+        }
 
     case "test-send":
         guard positional.count >= 2 else { fail(usage) }

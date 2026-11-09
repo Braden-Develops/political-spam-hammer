@@ -52,6 +52,15 @@ runs masked and no sender. It can only return a category label.
 
 Set `TEXTSTOP_MODEL` in the launch agent plist to change the model (default `claude-opus-5-5`).
 
+## Campaign log
+
+`textstop campaigns [days] [--out file.csv]` exports every political text from unknown senders still in
+Messages (default: last 365 days, to `~/Documents/political-texts.csv`): received time, sender number,
+campaign, how the campaign was identified, link hosts, and the full text. Campaign names come from, in
+order: the sender's own unsubscribe confirmation, a "Paid for by" disclaimer, the text naming itself
+("It's Mary Peltola"), or the sign-off above "Stop2End". A confirmed name carries over to other numbers
+that link to the same domain. It reads Messages, so deleted conversations drop out.
+
 ## Spam reporting (off by default)
 
 `textstop spam-report on` reports each text that got a real STOP to 7726, the US carriers' shared spam

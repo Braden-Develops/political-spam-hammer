@@ -331,6 +331,31 @@ check(sentTo == ["55011"] && reported == [bulk], "live STOP is followed by a 772
 let liveMetrics = try metricsText(state: liveState, report: nil)
 check(liveMetrics.contains(#"textstop_spam_reports_total{status="forwarded"} 1"#), "metrics: spam report status")
 
+// MARK: campaign log
+
+check(extractCampaign(from: ["Trump is at it again! Chip in: secure.actblue.com/x Stop2End",
+                             "You have been unsubscribed from AmeriPAC Future. No more messages will be sent."])
+      == Campaign(name: "AmeriPAC Future", source: "unsubscribe confirmation"), "campaign: unsubscribe confirmation wins")
+check(extractCampaign(from: ["Early voting starts now! Paid for by Smith for Senate. Reply STOP to end"])?.name == "Smith for Senate",
+      "campaign: paid for by")
+check(extractCampaign(from: ["Paid for by Friends of Jane Doe and not authorized by any candidate"])?.name == "Friends of Jane Doe",
+      "campaign: paid for by with authorization clause")
+check(extractCampaign(from: ["Hi it's Jen with Arizona Victory Fund. Will you chip in?"])?.name == "Arizona Victory Fund",
+      "campaign: sign-off")
+check(extractCampaign(from: ["Vote!"]) == nil, "campaign: none found")
+check(extractCampaign(from: ["TRUMP'S IRS ANNOUNCED: $1.8B!\nSign: r.turnoutpac.org/Y\n\nPTP26\nStop2End"])
+      == Campaign(name: "PTP26", source: "sign-off"), "campaign: sign-off above Stop2End, not the headline")
+check(extractCampaign(from: ["It's Mary Peltola. We spent down to $0. Help: https://peltola-text.com/x"])?.name == "Mary Peltola",
+      "campaign: candidate names themself")
+check(extractCampaign(from: ["Mary Peltola here. Ballots are still arriving."])?.name == "Mary Peltola", "campaign: 'X here'")
+check(isUnsubscribeConfirmation("You have been unsubscribed from Stop GOP Fund") && !isUnsubscribeConfirmation("Stop GOP Fund\nStop2End"),
+      "unsubscribe confirmations are recognised")
+check(extractCampaign(from: ["Rush $30 >> i.demsenate.org/k\n\nDSCC\n\nStop2End"])?.name == "DSCC", "campaign: blank line before Stop2End")
+check(rootDomain("t.stopgopfund.org/abc") == "stopgopfund.org", "root domain")
+check(linkHosts("Chip in: https://secure.actblue.com/donate/smith-sms and winred.com/abc") ==
+      ["secure.actblue.com/donate/smith-sms", "winred.com/abc"], "links: hosts and paths (got \(linkHosts("Chip in: https://secure.actblue.com/donate/smith-sms and winred.com/abc")))")
+check(csvField("=HYPERLINK(\"x\")") == "\"'=HYPERLINK(\"\"x\"\")\"", "csv: quotes and formula guard")
+
 // MARK: metrics
 
 let metrics = try metricsText(state: e2eState, report: RunReport(success: true, processed: 3, contacts: 2))
