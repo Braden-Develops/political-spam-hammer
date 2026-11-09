@@ -1,0 +1,10 @@
+.build/
+dist/
+.swiftpm/
+*.db
+*.db-*
+*.keychain-db
+*.pass
+*.p12
+*.pem
+.DS_Store

@@ -1,0 +1,19 @@
+# Optional Prometheus alert rules (add to a rule_files entry on the Pi).
+groups:
+  - name: textstop
+    rules:
+      - alert: TextstopNotRunning
+        # Fires when the Mac is asleep for 30+ minutes too; raise the window if that's noisy.
+        expr: time() - textstop_last_success_timestamp_seconds > 1800
+        for: 5m
+        annotations:
+          summary: "textstop hasn't completed a run in 30 minutes (lost Full Disk Access, or the Mac is off)"
+      - alert: TextstopRunsFailing
+        expr: textstop_last_run_success == 0
+        for: 10m
+        annotations:
+          summary: "textstop runs are failing; check ~/Library/Logs/textstop/agent.log"
+      - alert: TextstopSendFailures
+        expr: increase(textstop_sends_total{result=~"failed|script_failed"}[1h]) > 0
+        annotations:
+          summary: "a STOP reply failed to send"

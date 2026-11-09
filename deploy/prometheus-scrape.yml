@@ -1,0 +1,6 @@
+# Add under scrape_configs: in prometheus.yml on your Prometheus host, then restart monitoring-pod.
+# honor_labels keeps the job/instance labels textstop pushes instead of the Pushgateway's own.
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway.local:9091']
